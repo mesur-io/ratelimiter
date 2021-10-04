@@ -2,6 +2,7 @@ package ratelimiter
 
 import (
 	"log"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -22,6 +23,7 @@ type Manager struct {
 	activeTokens map[string]*Token
 	limit        int
 	makeToken    tokenFactory
+	mu           sync.Mutex
 }
 
 // Acquire is called to acquire a new token
@@ -101,7 +103,9 @@ func (m *Manager) tryGenerateToken() {
 	token := m.makeToken()
 
 	// Add token to active map
+	m.mu.Lock()
 	m.activeTokens[token.ID] = token
+	m.mu.Unlock()
 
 	// send token to outChan
 	go func() {
@@ -110,6 +114,8 @@ func (m *Manager) tryGenerateToken() {
 }
 
 func (m *Manager) isLimitExceeded() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if len(m.activeTokens) >= m.limit {
 		return true
 	}
@@ -121,6 +127,8 @@ func (m *Manager) releaseToken(token *Token) {
 		log.Print("unable to relase nil token")
 		return
 	}
+
+	m.mu.Lock()
 
 	if _, ok := m.activeTokens[token.ID]; !ok {
 		log.Printf("unable to relase token %s - not in use", token)
@@ -135,6 +143,8 @@ func (m *Manager) releaseToken(token *Token) {
 	// Delete from map
 	delete(m.activeTokens, token.ID)
 
+	m.mu.Unlock()
+
 	// process anything waiting for a rate limit
 	if m.awaitingToken() {
 		m.decNeedToken()
@@ -144,6 +154,7 @@ func (m *Manager) releaseToken(token *Token) {
 
 // loops over active tokens and releases any that are expired
 func (m *Manager) releaseExpiredTokens() {
+	m.mu.Lock()
 	for _, token := range m.activeTokens {
 		if token.IsExpired() {
 			go func(t *Token) {
@@ -151,6 +162,7 @@ func (m *Manager) releaseExpiredTokens() {
 			}(token)
 		}
 	}
+	m.mu.Unlock()
 }
 
 // reset task that runs once per provided duration and releases
@@ -159,6 +171,7 @@ func (m *Manager) runResetTokenTask(resetAfter time.Duration) {
 	go func() {
 		ticker := time.NewTicker(resetAfter)
 		for range ticker.C {
+			m.mu.Lock()
 			for _, token := range m.activeTokens {
 				if token.NeedReset(resetAfter) {
 					go func(t *Token) {
@@ -166,6 +179,7 @@ func (m *Manager) runResetTokenTask(resetAfter time.Duration) {
 					}(token)
 				}
 			}
+			m.mu.Unlock()
 		}
 	}()
 }
