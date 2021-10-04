@@ -8,7 +8,7 @@ import (
 // NewThrottleRateLimiter returns a throttle rate limiter
 func NewThrottleRateLimiter(conf *Config) (RateLimiter, error) {
 	if conf.Throttle == 0 {
-		return nil, errors.New("Throttle duration must be greater than zero")
+		return nil, errors.New("throttle duration must be greater than zero")
 	}
 
 	m := NewManager(conf)

@@ -116,10 +116,7 @@ func (m *Manager) tryGenerateToken() {
 func (m *Manager) isLimitExceeded() bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if len(m.activeTokens) >= m.limit {
-		return true
-	}
-	return false
+	return len(m.activeTokens) >= m.limit
 }
 
 func (m *Manager) releaseToken(token *Token) {
