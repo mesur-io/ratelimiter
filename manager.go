@@ -129,11 +129,13 @@ func (m *Manager) releaseToken(token *Token) {
 
 	if _, ok := m.activeTokens[token.ID]; !ok {
 		log.Printf("unable to relase token %s - not in use", token)
+		m.mu.Unlock()
 		return
 	}
 
 	if !token.IsExpired() {
 		log.Printf("unable to relase token %s - has not expired", token)
+		m.mu.Unlock()
 		return
 	}
 
